@@ -1,6 +1,6 @@
 ;;; sb-tech-on.el --- shimbun backend for Tech-On! -*- coding: iso-2022-7bit -*-
 
-;; Copyright (C) 2007, 2009 Katsumi Yamaoka
+;; Copyright (C) 2007-2011 Katsumi Yamaoka
 
 ;; Author: Katsumi Yamaoka <yamaoka@jpl.org>
 ;; Keywords: news
@@ -24,6 +24,7 @@
 
 ;;; Code:
 
+(eval-when-compile (require 'static))
 (require 'sb-rss)
 (require 'sb-multi)
 
@@ -116,7 +117,7 @@ Face: iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAgMAAAAOFJJnAAAADFBMVEUAAAB/gP+ttr7///8
 (defun shimbun-tech-on-login ()
   "Log in on Tech-On! with."
   (interactive)
-  (when (or (interactive-p)
+  (when (or (shimbun-interactive-p)
 	    (not shimbun-tech-on-logged-in))
     (let ((user (cond ((stringp shimbun-tech-on-user-name)
 		       shimbun-tech-on-user-name)
@@ -140,23 +141,24 @@ Face: iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAgMAAAAOFJJnAAAADFBMVEUAAAB/gP+ttr7///8
 					 (read-passwd "[Tech-On!] Password: "))
 				     (quit nil)))))
 		 (not (string-match "\\`[\t ]*\\'" pass)))
-	(let ((default-enable-multibyte-characters t))
-	  (with-temp-buffer
-	    (shimbun-retrieve-url
-	     (concat "https://techon.nikkeibp.co.jp/login/login.jsp"
-		     "?MODE=LOGIN_EXEC"
-		     "&USERID=" user
-		     "&PASSWORD=" pass)
-	     t)
-	    (goto-char (point-min))
-	    (setq shimbun-tech-on-logged-in
-		  (not (re-search-forward "\
+	(with-temp-buffer
+	  (static-unless (featurep 'xemacs)
+	    (set-buffer-multibyte t))
+	  (shimbun-retrieve-url
+	   (concat "https://techon.nikkeibp.co.jp/login/login.jsp"
+		   "?MODE=LOGIN_EXEC"
+		   "&USERID=" user
+		   "&PASSWORD=" pass)
+	   t)
+	  (goto-char (point-min))
+	  (setq shimbun-tech-on-logged-in
+		(not (re-search-forward "\
 \\(?:ユーザー名\\|パスワード\\).*に誤りがあります。\
 \\|会員登録が行われていません。\
 \\|ACTION=\"/login/login\\.jsp\\?MODE=LOGIN_EXEC\""
-					  nil t)))))
+					nil t))))
 	(if shimbun-tech-on-logged-in
-	    (when (interactive-p)
+	    (when (shimbun-interactive-p)
 	      (message "[Tech-On!] Logged in"))
 	  (when (prog2
 		    (message nil)
@@ -209,11 +211,8 @@ Face: iVBORw0KGgoAAAANSUhEUgAAACAAAAAgAgMAAAAOFJJnAAAADFBMVEUAAAB/gP+ttr7///8
       (while (re-search-forward "<p>\\([\t\n ]*<p>\\)+" nil t)
 	(delete-region (match-beginning 1) (match-end 0)))
       ;; Remove useless tags.
-      (goto-char (point-min))
-      (while (and (re-search-forward "\
-<div[\t\n ]+\\(?:[^\t\n >]+[\t\n ]+\\)*class=\"bpimage_click\"" nil t)
-		  (shimbun-end-of-tag "div" t))
-	(replace-match "\n"))
+      (shimbun-remove-tags
+       "\\(div\\)[\t\n ]+\\(?:[^\t\n >]+[\t\n ]+\\)*class=\"bpimage_click\"" t)
       (when author
 	(goto-char (point-min))
 	(insert "<p>" author "</p>\n"))
